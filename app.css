@@ -1,0 +1,16 @@
+#main-container {
+  margin-top: 25px;
+  margin-left: 25px;
+  margin-right: 25px;
+  margin-bottom: 25px;
+}
+
+#box-login-btns {
+  margin-left: 50px;
+  margin-right: 50px;
+}
+
+#box-signup-btns {
+  margin-left: 50px;
+  margin-right: 50px;
+}
