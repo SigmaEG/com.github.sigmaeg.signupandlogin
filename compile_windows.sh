@@ -1,3 +1,0 @@
-clang -c -Wall -Wextra -pedantic -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -std=c17 -g -o sha256.o sha256.c
-clang -c -Wall -Wextra -pedantic -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -std=c17 -g $(pkg-config --cflags gtk4) -o main.o main.c
-clang -Wall -Wextra -pedantic -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -std=c17 -g $(pkg-config --cflags gtk4) -Wl,--subsystem,windows -o main main.o sha256.o $(pkg-config --libs gtk4)
