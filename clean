@@ -1,0 +1,2 @@
+#!/bin/bash
+rm -f ./build/main.exe ./build/main.o ./build/sha256.o

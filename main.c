@@ -1,5 +1,6 @@
 #include "main.h"
 #include "sha256.h"
+#include <stdint.h>
 
 #if defined(GDK_WINDOWING_X11)
 
@@ -380,9 +381,11 @@
   ) {
     if (g_strcmp0(format_type, "uname") == 0) {
       for (size_t idx = 0; idx < strlen((gchar*)data); ++idx) {
-        if (!isalpha(format_type[idx]) && !isdigit(format_type[idx]))
+        if (!isalpha(data[idx]) && !isdigit(data[idx]))
           return false;
       }
+
+      return true;
     } else if (g_strcmp0(format_type, "pwd") == 0) {
       size_t special_char_count = 0;
       size_t scc_req = 1;
@@ -400,17 +403,26 @@
       size_t lower_count = 0;
       size_t lc_req = 1;
       
-      size_t numeral_count = 0;
+      size_t numeric_count = 0;
       size_t nc_req = 1;
 
       for (size_t idx = 0; idx < strlen((gchar*)data); ++idx) {
-        if (lower_count < lc_req && islower(data[idx]))
+        if (lower_count < lc_req && islower(data[idx])) {
           ++lower_count;
-        else if (upper_count < uc_req && isupper(data[idx]))
+
+          continue;
+        }
+        else if (upper_count < uc_req && isupper(data[idx])) {
           ++upper_count;
-        else if (numeral_count < nc_req && isdigit(data[idx]))
-          ++numeral_count;
-        else if (special_char_count < scc_req && isascii(data[idx])) {
+
+          continue;
+        }
+        else if (numeric_count < nc_req && isdigit(data[idx])) {
+          ++numeric_count;
+
+          continue;
+        }
+        else if (special_char_count < scc_req && !isalnum(data[idx])) {
           bool char_found = false;
           
           for (size_t jdx = 0; jdx < (sizeof(special_chars) / sizeof(special_chars[0])); ++jdx) {
@@ -419,12 +431,14 @@
               break;
             }
           }
+
+          continue;
         }
 
         return false;
       }
 
-      if (upper_count == uc_req && lower_count == lc_req && numeral_count == nc_req && special_char_count == scc_req)
+      if (upper_count >= uc_req && lower_count >= lc_req && numeric_count >= nc_req && special_char_count >= scc_req)
         return true;
     }
 
@@ -434,6 +448,41 @@
 #pragma endregion
 
 #pragma region EVENT_HANDLERS
+
+  static void
+  alert_cb(
+    GObject* source,
+    GAsyncResult* result,
+    gpointer user_data
+  ) {
+    GError* error = NULL;
+    int32_t idx_result = gtk_alert_dialog_choose_finish(GTK_ALERT_DIALOG(source), result, &error);
+
+    if (error != NULL)
+      idx_result = -1;
+
+    ((void(*)(int32_t res))user_data)(idx_result);
+  }
+
+  static int32_t
+  alert(
+    const char* title,
+    const char* message,
+    gboolean modal,
+    void(*callback)(int32_t res)
+  ) {
+    GtkAlertDialog* adlg = gtk_alert_dialog_new("%s", title);
+    
+    gtk_alert_dialog_set_detail(adlg, message);
+    gtk_alert_dialog_set_modal(adlg, modal);
+    
+    if (callback != NULL)
+      gtk_alert_dialog_choose(adlg, GTK_WINDOW(window), NULL, &alert_cb, (gpointer)callback);
+    else
+      gtk_alert_dialog_show(adlg, GTK_WINDOW(window));
+
+    return 0;
+  }
 
   static void
   open_page(
@@ -447,7 +496,7 @@
   static void
   back_clicked(
     GtkWidget* widget,
-    gpointer uiser_data
+    gpointer user_data
   );
 
   static void
@@ -514,11 +563,6 @@
   }
 
   static void
-  reset_signup_btn(void) {
-    gtk_button_set_label(GTK_BUTTON(signup_confirm), "Signup");
-  }
-
-  static void
   signup_clicked(
     GtkWidget* widget,
     gpointer user_data
@@ -526,23 +570,17 @@
     const guint8* username = (const guint8*)gtk_editable_get_text(GTK_EDITABLE(signup_ubox));
 
     if (strlen((gchar*)username) == 0) {
-      gtk_button_set_label(GTK_BUTTON(signup_confirm), "Empty Username");
+      alert("< Registration Unsuccessful >", "< Username Empty >", true, NULL);
 
-      g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
-     
       return;
     } else if (!check_format(username, "uname")) {
-      gtk_button_set_label(GTK_BUTTON(signup_confirm), "Invalid Characters (Username)");
+      alert("< Registration Unsuccessful >", "< Username May Only Contain a-Z, 0-9 >", true, NULL);
 
-      g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
-     
       return;
     }
 
     if (check_user_exists(username)) {
-      gtk_button_set_label(GTK_BUTTON(signup_confirm), "User Exists");
-
-      g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
+      alert("< Registration Unsuccessful >", "< Username Exists >", true, NULL);
 
       return;
     }
@@ -550,16 +588,12 @@
     const guint8* pwd = (const guint8*)gtk_editable_get_text(GTK_EDITABLE(signup_pwdbox));
 
     if (strlen((gchar*)pwd) == 0) {
-      gtk_button_set_label(GTK_BUTTON(signup_confirm), "Empty Password");
+      alert("< Registration Unsuccessful >", "< Empty Password >", true, NULL);
 
-      g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
-     
       return;
     } else if (!check_format(pwd, "pwd")) {
-      gtk_button_set_label(GTK_BUTTON(signup_confirm), "Weak Password");
+      alert("< Registration Unsuccessful >", "< Weak Password : Requires x,y,z > ", true, NULL);
 
-      g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
-     
       return;
     }
 
@@ -567,22 +601,18 @@
     pwd = NULL;
 
     if (!allocate_user(username, pwdhash)) {
-      gtk_button_set_label(GTK_BUTTON(signup_confirm), "malloc(...) : Failed");
-    
-      g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
+      alert("< Registration Unsuccessful >", "< malloc(...) : Failed >", true, NULL);
     }
     else {
       save_user_data();
 
-      gtk_button_set_label(GTK_BUTTON(signup_confirm), "Registered");
-
-      g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
+      alert("< Registration Successful >", "< Succesfully Registered >", true, NULL);
     }
   }
 
   static void
-  reset_login_btn(void) {
-    gtk_button_set_label(GTK_BUTTON(login_confirm), "Login");
+  login_exit(int32_t result) {
+    g_application_quit(G_APPLICATION(app));
   }
 
   static void
@@ -594,9 +624,7 @@
     const guint8* pwd = (const guint8*)gtk_editable_get_text(GTK_EDITABLE(login_pwdbox));
 
     if (strlen((gchar*)username) == 0 || strlen((gchar*)pwd) == 0) {
-      gtk_button_set_label(GTK_BUTTON(login_confirm), "Empty Field(s)");
-
-      g_timeout_add(750, G_SOURCE_FUNC(reset_login_btn), NULL);
+      alert("< Login Unsuccessful >", "< Empty Field(s) >", true, NULL);
      
       return;
     }
@@ -604,17 +632,10 @@
     const guint8* pwdhash = hash_aes256(pwd, strlen((gchar*)pwd));
     pwd = NULL;
 
-    if (check_user_pass_details(username, pwdhash)) {
-      gtk_button_set_label(GTK_BUTTON(login_confirm), "Login Successful");
-
-      g_timeout_add(500, G_SOURCE_FUNC(g_application_quit), G_APPLICATION(app));
-    }
-    else {
-      g_print("failed\n");
-      gtk_button_set_label(GTK_BUTTON(login_confirm), "Invalid Credentials");
-    
-      g_timeout_add(1000, G_SOURCE_FUNC(reset_login_btn), NULL);
-    }
+    if (check_user_pass_details(username, pwdhash))
+      alert("< Login Successful >", "Welcome!", true, login_exit);
+    else
+      alert("< Login Unsuccessful >", "< Invalid Credentials >", true, NULL);
   }
 
 #pragma endregion

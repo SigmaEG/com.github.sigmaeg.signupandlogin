@@ -1,0 +1,6 @@
+#!/bin/bash
+
+clang -c -Wall -Wextra -pedantic -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -Wno-extra-semi -g -o sha256.o sha256.c
+clang -c -Wall -Wextra -pedantic -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -Wno-extra-semi -g $(pkg-config --cflags gtk4) -o main.o main.c
+clang -Wall -Wextra -pedantic -Wno-unused-parameter -Wno-unused-function -Wno-unused-variable -Wno-extra-semi -g $(pkg-config --cflags gtk4) -Wl,--subsystem,windows -o main main.o sha256.o $(pkg-config --libs gtk4)
+mv -t build main.exe main.o sha256.o
