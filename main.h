@@ -1,6 +1,10 @@
 #pragma once
 
+#ifndef _CGSSL_MAIN_H
+#define _CGSSL_MAIN_H
+
 #include <gtk/gtk.h>
+#include <stdbool.h>
 
 #if defined(_WIN32)
   
@@ -96,3 +100,5 @@
   );
 
 #pragma endregion
+
+#endif

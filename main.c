@@ -167,7 +167,7 @@
 
     return read_count;
   }
-  
+
   static void
   parse_user_data(void);
 
@@ -373,6 +373,64 @@
     user_data = NULL;
   }
 
+  static bool
+  check_format(
+    const guint8* data,
+    const gchar* format_type
+  ) {
+    if (g_strcmp0(format_type, "uname") == 0) {
+      for (size_t idx = 0; idx < strlen((gchar*)data); ++idx) {
+        if (!isalpha(format_type[idx]) && !isdigit(format_type[idx]))
+          return false;
+      }
+    } else if (g_strcmp0(format_type, "pwd") == 0) {
+      size_t special_char_count = 0;
+      size_t scc_req = 1;
+      const guint8 special_chars[30] = {
+        '~', '!', '@', '#', '$', '%',
+        '^', '&', '*', '(', ')', '_',
+        '+', '-', '{', '}', '|', '[',
+        ']', '\\', ':', '"', ';', '\"',
+        '<', '>', '?', ',', '.', '/'
+      };
+
+      size_t upper_count = 0;
+      size_t uc_req = 1;
+      
+      size_t lower_count = 0;
+      size_t lc_req = 1;
+      
+      size_t numeral_count = 0;
+      size_t nc_req = 1;
+
+      for (size_t idx = 0; idx < strlen((gchar*)data); ++idx) {
+        if (lower_count < lc_req && islower(data[idx]))
+          ++lower_count;
+        else if (upper_count < uc_req && isupper(data[idx]))
+          ++upper_count;
+        else if (numeral_count < nc_req && isdigit(data[idx]))
+          ++numeral_count;
+        else if (special_char_count < scc_req && isascii(data[idx])) {
+          bool char_found = false;
+          
+          for (size_t jdx = 0; jdx < (sizeof(special_chars) / sizeof(special_chars[0])); ++jdx) {
+            if (data[idx] == special_chars[jdx]) {
+              ++special_char_count;
+              break;
+            }
+          }
+        }
+
+        return false;
+      }
+
+      if (upper_count == uc_req && lower_count == lc_req && numeral_count == nc_req && special_char_count == scc_req)
+        return true;
+    }
+
+    return false;
+  }
+
 #pragma endregion
 
 #pragma region EVENT_HANDLERS
@@ -473,6 +531,12 @@
       g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
      
       return;
+    } else if (!check_format(username, "uname")) {
+      gtk_button_set_label(GTK_BUTTON(signup_confirm), "Invalid Characters (Username)");
+
+      g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
+     
+      return;
     }
 
     if (check_user_exists(username)) {
@@ -491,22 +555,27 @@
       g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
      
       return;
+    } else if (!check_format(pwd, "pwd")) {
+      gtk_button_set_label(GTK_BUTTON(signup_confirm), "Weak Password");
+
+      g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
+     
+      return;
     }
 
     const guint8* pwdhash = hash_aes256(pwd, strlen((gchar*)pwd));
     pwd = NULL;
 
     if (!allocate_user(username, pwdhash)) {
-      g_print("Failed to Allocate User: %s\n", username);
-      
-      gtk_button_set_label(GTK_BUTTON(signup_confirm), "malloc(...) FAILED");
-     
+      gtk_button_set_label(GTK_BUTTON(signup_confirm), "malloc(...) : Failed");
+    
       g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
-    } else {
+    }
+    else {
       save_user_data();
 
       gtk_button_set_label(GTK_BUTTON(signup_confirm), "Registered");
-     
+
       g_timeout_add(750, G_SOURCE_FUNC(reset_signup_btn), NULL);
     }
   }
@@ -702,10 +771,20 @@
 
 #pragma endregion
 
+#if defined(_WIN32)
+int WINAPI WinMain(
+  HINSTANCE hInstance,
+  HINSTANCE hPrevInstance,
+  LPSTR lpCmdLine,
+  int nShowCmd
+)
+#else
 int32_t main(
   int32_t argc,
   char** argv
-) {
+)
+#endif
+{
   parse_user_data();
 
   app = gtk_application_new(
@@ -716,10 +795,14 @@ int32_t main(
   g_signal_connect(app, "startup", G_CALLBACK(startup), NULL);
   g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
 
-  int32_t status = g_application_run(G_APPLICATION(app), argc, argv);
+  #if !defined(_WIN32)
+    int32_t status = g_application_run(G_APPLICATION(app), argc, argv);
+  #else
+    int32_t status = g_application_run(G_APPLICATION(app), 0, NULL);
+  #endif
+  
   g_clear_object(&app);
 
   save_user_data();
-
   free_user_data();
 }
