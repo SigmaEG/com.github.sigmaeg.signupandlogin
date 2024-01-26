@@ -1,0 +1,8 @@
+#!/bin/bash
+if [ ! -f build/main.exe ]
+  then
+    ./compile
+fi
+
+cd build
+./main
